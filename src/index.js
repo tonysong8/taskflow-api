@@ -5,16 +5,28 @@ app.use(express.json());
 const tasks = [];
 const projects = [];
 
+const isValidDueDate = (value) =>
+  typeof value === 'string' && !Number.isNaN(Date.parse(value));
+
 app.get('/tasks', (req, res) => {
-  const { status, priority, assignee } = req.query;
+  const { status, priority, assignee, overdue } = req.query;
   let result = tasks;
   if (status) result = result.filter(t => t.status === status);
   if (priority) result = result.filter(t => t.priority === priority);
   if (assignee) result = result.filter(t => t.assignee === assignee);
+  if (overdue === 'true') {
+    const now = new Date();
+    result = result.filter(
+      t => t.dueDate && new Date(t.dueDate) < now && t.status !== 'done'
+    );
+  }
   res.json(result);
 });
 
 app.post('/tasks', (req, res) => {
+  if (req.body.dueDate !== undefined && !isValidDueDate(req.body.dueDate)) {
+    return res.status(400).json({ error: 'dueDate must be a valid ISO 8601 date string' });
+  }
   const task = { id: Date.now(), createdAt: new Date(), status: 'open', ...req.body };
   tasks.push(task);
   res.status(201).json(task);
@@ -29,6 +41,13 @@ app.get('/tasks/:id', (req, res) => {
 app.put('/tasks/:id', (req, res) => {
   const idx = tasks.findIndex(t => t.id === Number(req.params.id));
   if (idx === -1) return res.status(404).json({ error: 'Task not found' });
+  if (
+    req.body.dueDate !== undefined &&
+    req.body.dueDate !== null &&
+    !isValidDueDate(req.body.dueDate)
+  ) {
+    return res.status(400).json({ error: 'dueDate must be a valid ISO 8601 date string' });
+  }
   tasks[idx] = { ...tasks[idx], ...req.body, updatedAt: new Date() };
   res.json(tasks[idx]);
 });
